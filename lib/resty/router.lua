@@ -20,6 +20,12 @@ local LOG_ERR = ngx.ERR
 local LOG_INFO = ngx.INFO
 local LOG_WARN = ngx.WARN
 
+-- minimum TTL is 1 second, not 0, due to ngx.shared.DICT.set exptime
+_M.MINIMUM_TTL = 1
+local DEFAULT_ACTUALIZE_TTL = 1
+local DEFAULT_NEGATIVE_TTL = 1
+local DEFAULT_POSITIVE_TTL = 60
+
 local function log(log_level, ...)
     ngx.log(log_level, "router: " .. cjson.encode({...}))
 end
@@ -43,33 +49,48 @@ function _M.log_debug(...)
     log(LOG_DEBUG, ...)
 end
 
-function _M.new(self, backend_class, opts)
-    local opts_global = {
-    }
-    if opts then
-        for k,v in pairs(opts) do
-            if type(v) ~= "table" then
-                opts_global[k] = v
-            end
+function _M.new(self, backend_name, opts)
+    local backend_class = require(backend_name)
+    local backend = backend_class:new(opts)
+    local cache = nil
+    local lookup_route = function (key)
+        local lookup = function ()
+            return backend:lookup(key)
         end
+        if not cache then
+            cache = shcache:new(
+                ngx.shared.cache_dict,
+                {
+                    external_lookup = lookup,
+                    encode = cjson.encode,
+                    decode = cjson.decode,
+                },
+                {
+                    positive_ttl = opts.positive_ttl or DEFAULT_POSITIVE_TTL,
+                    negative_ttl = opts.negative_ttl or DEFAULT_NEGATIVE_TTL,
+                    actualize_ttl = opts.actualize_ttl or DEFAULT_ACTUALIZE_TTL,
+                    name = "resty_router_cache",
+                }
+            )
+        end
+        local data, is_hit = cache:load(key)
+        return data
     end
-    local backend = require(backend_class)
     local self = {
-        opts = opts_global,
-        backend = backend:new(opts)
+        backend = backend,
+        lookup = lookup_route
     }
     return setmetatable(self, mt)
 end
 
 function _M.get_route(self, key)
-    local routes = self.backend:lookup(key)
-    if not routes or not #routes then
+    local routes = self.lookup(key)
+    if not routes or 0 == #routes then
         return nil
     end
     local route = routes[math.random(#routes)]
-    local url = route.address .. ":" .. route.port .. route.path
-    self.log_info("selected route", url)
-    return url
+    self.log_info({ key = key, route = route })
+    return route
 end
 
 return _M
