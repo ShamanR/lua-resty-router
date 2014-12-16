@@ -23,12 +23,15 @@ __DATA__
 --- config
     location /t {
         content_by_lua '
-            local router = require "resty.router.dns"
-            local r = router:new{
-              dns = {
-                nameservers = {"8.8.8.8"}
-              }
-            }
+            local router = require "resty.router"
+            local r = router:new(
+                "resty.router.dns",
+                {
+                    dns = {
+                        nameservers = {"8.8.8.8"}
+                    }
+                }
+            )
             ngx.say(r:get_route("example.com"))
         ';
     }
