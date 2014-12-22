@@ -73,18 +73,18 @@ function _M.new(self, backend_name, opts)
                 }
             )
         end
-        local data, is_hit = cache:load(key)
+        local data = cache:load(key)
         return data
     end
     local self = {
         backend = backend,
-        lookup = lookup_route
+        lookup_route = lookup_route
     }
     return setmetatable(self, mt)
 end
 
 function _M.get_route(self, key)
-    local routes = self.lookup(key)
+    local routes = self.lookup_route(key)
     if not routes or 0 == #routes then
         return nil
     end

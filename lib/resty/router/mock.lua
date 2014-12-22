@@ -29,7 +29,6 @@ end
 function _M.lookup(self, key)
     self.current_response = self.current_response + 1
     local data = self.responses[self.current_response]
-    log_info(data)
     if data and data.route and data.ttl then
         if data.ttl < 1 then
             data.ttl = MINIMUM_TTL

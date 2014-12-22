@@ -23,8 +23,9 @@ http {
   server {
     listen 8888;
     location / {
-      set $route '';
-      access_by_lua '
+      set $rr_route '';
+      set $rr_status 'NOTFOUND';
+      rewrite_by_lua '
         local router = require "resty.router"
         local r = router:new(
           "resty.router.dns",
@@ -38,11 +39,13 @@ http {
         if not route then
             return ngx.exit(404)
         end
-        ngx.var.route = route
+        ngx.var.rr_route = route
+        ngx.var.rr_status = ngx.ctx.shcache["resty_router_cache"].cache_status
       ';
-      more_set_headers "X-Resty-Router-Key: $arg_host";
-      more_set_headers "X-Resty-Router-Route: $route";
-      proxy_pass http://$route;
+      more_set_headers "X-RR-Key: $arg_host";
+      more_set_headers "X-RR-State: $rr_status";
+      more_set_headers "X-RR-Route: $rr_route";
+      proxy_pass http://$rr_route;
     }
   }
 }
@@ -63,8 +66,9 @@ A more inventive approach for a microservices architecture is to use SRV records
 # example-service.example.com  IN SRV    1 1 5000 10.1.1.3
 ...
 location / {
-  set $route '';
-  access_by_lua '
+  set $rr_route '';
+  set $rr_status 'NOTFOUND';
+  rewrite_by_lua '
     local router = require "resty.router"
     local r = router:new(
       "resty.router.dns",
@@ -79,11 +83,13 @@ location / {
     if not route then
         return ngx.exit(404)
     end
-    ngx.var.route = route
+    ngx.var.rr_route = route
+    ngx.var.rr_status = ngx.ctx.shcache["resty_router_cache"].cache_status
   ';
-  more_set_headers "X-Resty-Router-Key: $http_host";
-  more_set_headers "X-Resty-Router-Route: $route";
-  proxy_pass http://$route;
+  more_set_headers "X-RR-Key: $arg_host";
+  more_set_headers "X-RR-State: $rr_status";
+  more_set_headers "X-RR-Route: $rr_route";
+  proxy_pass http://$rr_route;
 }
 ...
 ```
