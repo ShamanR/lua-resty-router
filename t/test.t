@@ -38,7 +38,7 @@ __DATA__
                     }
                 }
             )
-            ngx.say(r:get_route("example.com"))
+            ngx.say(r:get_route("a.lua-resty-router.jbyers.com"))
         ';
     }
 --- request
@@ -46,7 +46,7 @@ GET /t
 --- no_error_log
 [error]
 --- response_body
-93.184.216.34:80
+10.1.1.1:80
 
 
 
