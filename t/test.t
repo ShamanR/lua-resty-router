@@ -34,7 +34,7 @@ __DATA__
                 "resty.router.dns",
                 {
                     dns_opts = {
-                        nameservers = {"8.8.8.8"}
+                        nameservers = { "8.8.8.8" }
                     }
                 }
             )
@@ -114,7 +114,7 @@ nil
 
 
 
-=== TEST 2: mock mixed TTL
+=== TEST 3: mock mixed TTL
 --- http_config eval: $::HttpConfig
 --- config
     location /t {
@@ -145,3 +145,30 @@ GET /t
 2.2.2.2:82
 nil
 2.2.2.2:82
+
+
+
+=== TEST 4: public SRV record
+--- http_config eval: $::HttpConfig
+--- config
+    location /t {
+        content_by_lua '
+            local router = require "resty.router"
+            local r = router:new(
+                "resty.router.dns",
+                {
+                    dns_opts = {
+                        nameservers = { "8.8.8.8" },
+                        qtype = 33
+                    }
+                }
+            )
+            ngx.say(r:get_route("srv.lua-resty-router.jbyers.com"))
+        ';
+    }
+--- request
+GET /t
+--- no_error_log
+[error]
+--- response_body
+10.1.1.2:5000

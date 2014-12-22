@@ -13,9 +13,10 @@ local RECORD_A = dns.TYPE_A
 local RECORD_SRV = dns.TYPE_SRV
 
 local DEFAULT_PORT = 80
+local DEFAULT_DNS_QUERY_TYPE = RECORD_A
+local DEFAULT_DNS_RETRIES = 3
 local DEFAULT_DNS_SERVERS = { "127.0.0.1" }
 local DEFAULT_DNS_TIMEOUT = 5000
-local DEFAULT_DNS_RETRIES = 3
 
 local router = require "resty.router"
 local log_info = router.log_info
@@ -28,10 +29,13 @@ function _M.new(self, opts)
         nameservers = DEFAULT_DNS_SERVERS,
         retrans = DEFAULT_DNS_RETRIES,
         timeout = DEFAULT_DNS_TIMEOUT,
+        qtype = DEFAULT_DNS_QUERY_TYPE,
     }
     if opts.dns_opts then
-        for k,v in pairs(opts.dns_opts) do
-            opts_dns[k] = v
+        for k,v in pairs(opts_dns) do
+            if opts.dns_opts[k] then
+                opts_dns[k] = opts.dns_opts[k]
+            end
         end
     end
     local resolver, err = dns:new(opts_dns)
@@ -39,18 +43,19 @@ function _M.new(self, opts)
         log_err("DNS resolver failure", err)
     end
     local self = {
-        resolver = resolver
+        resolver = resolver,
+        qtype = opts_dns.qtype,
     }
     return setmetatable(self, mt)
 end
 
 function _M.lookup(self, hostname)
-    local answers, err = self.resolver:query(hostname)
+    local answers, err = self.resolver:query(hostname, { qtype = self.qtype })
     if not answers then
         log_err("DNS query failure", err)
         return
     elseif answers.errcode then
-        log_err("DNS query error", {answers})
+        log_err("DNS query error", { answers })
     end
     local routes = {}
     local i = 1
@@ -60,6 +65,8 @@ function _M.lookup(self, hostname)
         local route = nil
         if record.type == RECORD_A then
             route = record.address .. ":" .. DEFAULT_PORT
+        elseif record.type == RECORD_SRV then
+            route = record.target .. ":" .. record.port
         end
         if route then
             if record.ttl and record.ttl > MINIMUM_TTL and record.ttl < ttl then
