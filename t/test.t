@@ -86,7 +86,7 @@ NO_DATA
                 "resty.router.mock",
                 {
                     mock_opts = {
-                        { route = "1.1.1.1:81", ttl = 0 },
+                        { routes = { "1.1.1.1:81" }, ttl = 0 },
                     },
                 }
             )
@@ -124,7 +124,7 @@ STALE
                 "resty.router.mock",
                 {
                     mock_opts = {
-                        { route = "2.2.2.2:82", ttl = 100 },
+                        { routes = { "2.2.2.2:82" }, ttl = 100 },
                     },
                 }
             )
@@ -164,8 +164,8 @@ NO_DATA
                 "resty.router.mock",
                 {
                     mock_opts = {
-                        { route = "1.1.1.1:81", ttl = 0 },   -- foo
-                        { route = "2.2.2.2:82", ttl = 100 }, -- bar
+                        { routes = { "1.1.1.1:81" }, ttl = 0 },   -- foo
+                        { routes = { "2.2.2.2:82" }, ttl = 100 }, -- bar
                     },
                 }
             )
@@ -193,6 +193,44 @@ MISS
 STALE
 2.2.2.2:82
 HIT
+
+
+
+=== TEST 5: mock negative cache
+--- http_config eval: $::HttpConfig
+--- config
+    location /t {
+        content_by_lua '
+            local router = require "resty.router"
+            local r = router:new(
+                "resty.router.mock",
+                {
+                    mock_opts = {
+                        { routes = { "1.1.1.1:81" }, ttl = 0 },
+                    },
+                }
+            )
+            ngx.say(r:get_route("foo"))
+            ngx.say(ngx.ctx.shcache["resty_router_cache"].cache_status)
+            ngx.sleep(1)
+            ngx.say(r:get_route("bar"))
+            ngx.say(ngx.ctx.shcache["resty_router_cache"].cache_status)
+            ngx.sleep(1)
+            ngx.say(r:get_route("bar"))
+            ngx.say(ngx.ctx.shcache["resty_router_cache"].cache_status)
+        ';
+    }
+--- request
+GET /t
+--- no_error_log
+[error]
+--- response_body
+1.1.1.1:81
+MISS
+nil
+NO_DATA
+nil
+HIT_NEGATIVE
 
 
 
