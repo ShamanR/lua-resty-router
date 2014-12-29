@@ -13,9 +13,9 @@ local MINIMUM_TTL = router.MINIMUM_TTL
 --
 -- Pass in a table of responses in order and mock will respond thusly, e.g.
 -- {
---     { route = "1.1.1.1:81", ttl = 0 },
---     { route = "2.2.2.2:82", ttl = 100 },
---     { route = "3.3.3.3:83", ttl = 0 },
+--     { routes = { "1.1.1.1:81" }, ttl = 0 },
+--     { routes = { "2.2.2.2:82" }, ttl = 100 },
+--     { routes = { "3.3.3.3:83" }, ttl = 0 },
 -- }
 --
 function _M.new(self, opts)
@@ -29,11 +29,11 @@ end
 function _M.lookup(self, key)
     self.current_response = self.current_response + 1
     local data = self.responses[self.current_response]
-    if data and data.route and data.ttl then
+    if data and data.routes and data.ttl then
         if data.ttl < 1 then
             data.ttl = MINIMUM_TTL
         end
-        return { data.route }, nil, data.ttl
+        return data.routes, nil, data.ttl
     end
     return
 end
