@@ -22,8 +22,8 @@ local LOG_WARN = ngx.WARN
 
 -- minimum TTL is 1 second, not 0, due to ngx.shared.DICT.set exptime
 _M.MINIMUM_TTL = 1
-local DEFAULT_ACTUALIZE_TTL = 1
-local DEFAULT_NEGATIVE_TTL = 1
+local DEFAULT_ACTUALIZE_TTL = 10
+local DEFAULT_NEGATIVE_TTL = 10
 local DEFAULT_POSITIVE_TTL = 60
 
 local function log(log_level, ...)
@@ -50,41 +50,48 @@ function _M.log_debug(...)
 end
 
 function _M.new(self, backend_name, opts)
+    local opts_cache = {
+        positive_ttl = DEFAULT_POSITIVE_TTL,
+        negative_ttl = DEFAULT_NEGATIVE_TTL,
+        actualize_ttl = DEFAULT_ACTUALIZE_TTL,
+    }
+    for k,v in pairs(opts_cache) do
+        if opts[k] then
+            opts_cache[k] = opts[k]
+        end
+    end
     local backend_class = require(backend_name)
     local backend = backend_class:new(opts)
-    local cache = nil
-    local lookup_route = function (key)
-        local lookup = function ()
-            return backend:lookup(key)
-        end
-        if not cache then
-            cache = shcache:new(
-                ngx.shared.cache_dict,
-                {
-                    external_lookup = lookup,
-                    encode = cjson.encode,
-                    decode = cjson.decode,
-                },
-                {
-                    positive_ttl = opts.positive_ttl or DEFAULT_POSITIVE_TTL,
-                    negative_ttl = opts.negative_ttl or DEFAULT_NEGATIVE_TTL,
-                    actualize_ttl = opts.actualize_ttl or DEFAULT_ACTUALIZE_TTL,
-                    name = "resty_router_cache",
-                }
-            )
-        end
-        local data = cache:load(key)
-        return data
-    end
     local self = {
         backend = backend,
-        lookup_route = lookup_route
+        opts = opts_cache,
     }
     return setmetatable(self, mt)
 end
 
 function _M.get_route(self, key)
-    local routes = self.lookup_route(key)
+    local lookup_route = function(key)
+        local lookup = function(key)
+            return self.backend:lookup(key)
+        end
+        local cache = shcache:new(
+            ngx.shared.cache_dict,
+            {
+                external_lookup = lookup,
+                external_lookup_arg = key,
+                encode = cjson.encode,
+                decode = cjson.decode,
+            },
+            {
+                positive_ttl = self.opts.positive_ttl,
+                negative_ttl = self.opts.negative_ttl,
+                actualize_ttl = self.opts.actualize_ttl,
+                name = "resty_router_cache",
+            }
+        )
+        return cache:load(key)
+    end
+    local routes = lookup_route(key)
     if not routes or 0 == #routes then
         return nil
     end

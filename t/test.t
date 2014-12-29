@@ -50,7 +50,33 @@ GET /t
 
 
 
-=== TEST 1: mock zero TTL
+=== TEST 1: mock no response
+--- http_config eval: $::HttpConfig
+--- config
+    location /t {
+        content_by_lua '
+            local router = require "resty.router"
+            local r = router:new(
+                "resty.router.mock",
+                {
+                    mock_opts = { },
+                }
+            )
+            ngx.say(r:get_route("foo"))
+            ngx.say(ngx.ctx.shcache["resty_router_cache"].cache_status)
+        ';
+    }
+--- request
+GET /t
+--- no_error_log
+[error]
+--- response_body
+nil
+NO_DATA
+
+
+
+=== TEST 2: mock zero TTL
 --- http_config eval: $::HttpConfig
 --- config
     location /t {
@@ -66,9 +92,12 @@ GET /t
             )
             -- minimum TTL is 1 second, not 0, due to ngx.shared.DICT.set exptime
             ngx.say(r:get_route("foo"))
+            ngx.say(ngx.ctx.shcache["resty_router_cache"].cache_status)
             ngx.say(r:get_route("bar"))
-            ngx.sleep(1.1)
+            ngx.say(ngx.ctx.shcache["resty_router_cache"].cache_status)
+            ngx.sleep(1)
             ngx.say(r:get_route("foo"))
+            ngx.say(ngx.ctx.shcache["resty_router_cache"].cache_status)
         ';
     }
 --- request
@@ -77,12 +106,15 @@ GET /t
 [error]
 --- response_body
 1.1.1.1:81
+MISS
 nil
-nil
+NO_DATA
+1.1.1.1:81
+STALE
 
 
 
-=== TEST 2: mock with TTL
+=== TEST 3: mock with TTL
 --- http_config eval: $::HttpConfig
 --- config
     location /t {
@@ -97,9 +129,13 @@ nil
                 }
             )
             ngx.say(r:get_route("foo"))
+            ngx.say(ngx.ctx.shcache["resty_router_cache"].cache_status)
             ngx.say(r:get_route("foo"))
+            ngx.say(ngx.ctx.shcache["resty_router_cache"].cache_status)
             ngx.say(r:get_route("foo"))
-            ngx.say(r:get_route("zod"))
+            ngx.say(ngx.ctx.shcache["resty_router_cache"].cache_status)
+            ngx.say(r:get_route("baz"))
+            ngx.say(ngx.ctx.shcache["resty_router_cache"].cache_status)
         ';
     }
 --- request
@@ -108,13 +144,17 @@ GET /t
 [error]
 --- response_body
 2.2.2.2:82
+MISS
 2.2.2.2:82
+HIT
 2.2.2.2:82
+HIT
 nil
+NO_DATA
 
 
 
-=== TEST 3: mock mixed TTL
+=== TEST 4: mock mixed TTL
 --- http_config eval: $::HttpConfig
 --- config
     location /t {
@@ -124,16 +164,20 @@ nil
                 "resty.router.mock",
                 {
                     mock_opts = {
-                        { route = "1.1.1.1:81", ttl = 1 },
-                        { route = "2.2.2.2:82", ttl = 100 },
+                        { route = "1.1.1.1:81", ttl = 0 },   -- foo
+                        { route = "2.2.2.2:82", ttl = 100 }, -- bar
                     },
                 }
             )
             ngx.say(r:get_route("foo"))
+            ngx.say(ngx.ctx.shcache["resty_router_cache"].cache_status)
             ngx.say(r:get_route("bar"))
-            ngx.sleep(1.1)
+            ngx.say(ngx.ctx.shcache["resty_router_cache"].cache_status)
+            ngx.sleep(1)
             ngx.say(r:get_route("foo"))
+            ngx.say(ngx.ctx.shcache["resty_router_cache"].cache_status)
             ngx.say(r:get_route("bar"))
+            ngx.say(ngx.ctx.shcache["resty_router_cache"].cache_status)
         ';
     }
 --- request
@@ -142,13 +186,17 @@ GET /t
 [error]
 --- response_body
 1.1.1.1:81
+MISS
 2.2.2.2:82
-nil
+MISS
+1.1.1.1:81
+STALE
 2.2.2.2:82
+HIT
 
 
 
-=== TEST 4: public SRV record
+=== TEST 5: public SRV record
 --- http_config eval: $::HttpConfig
 --- config
     location /t {
@@ -164,6 +212,7 @@ nil
                 }
             )
             ngx.say(r:get_route("srv.lua-resty-router.jbyers.com"))
+            ngx.say(r:get_route("no-record.lua-resty-router.jbyers.com"))
         ';
     }
 --- request
@@ -172,3 +221,4 @@ GET /t
 [error]
 --- response_body
 10.1.1.2:5000
+nil

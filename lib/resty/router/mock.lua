@@ -34,9 +34,8 @@ function _M.lookup(self, key)
             data.ttl = MINIMUM_TTL
         end
         return { data.route }, nil, data.ttl
-    else
-        return { }, nil, nil
     end
+    return
 end
 
 return _M

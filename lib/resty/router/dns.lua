@@ -9,6 +9,11 @@ if not ok then
     error("resty-dns-resolver module required")
 end
 
+local ok, cjson = pcall(require, "cjson")
+if not ok then
+    error("cjson module required")
+end
+
 local RECORD_A = dns.TYPE_A
 local RECORD_SRV = dns.TYPE_SRV
 
@@ -52,10 +57,9 @@ end
 function _M.lookup(self, hostname)
     local answers, err = self.resolver:query(hostname, { qtype = self.qtype })
     if not answers then
-        log_err("DNS query failure", err)
-        return
+        return nil, cjson.encode({"DNS query failure", hostname, err})
     elseif answers.errcode then
-        log_err("DNS query error", { answers })
+        return nil, cjson.encode({"DNS query error", hostname, answers})
     end
     local routes = {}
     local i = 1
