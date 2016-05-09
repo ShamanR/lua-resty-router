@@ -70,12 +70,13 @@ location / {
   set $rr_status 'NOTFOUND';
   rewrite_by_lua '
     local router = require "resty.router"
+    local dns = require "resty.dns.resolver"
     local r = router:new(
       "resty.router.dns",
       {
         dns_opts = {
           nameservers = { "8.8.8.8" },
-          record_type = "SRV"
+          qtype = dns.TYPE_SRV
         }
       }
     )
